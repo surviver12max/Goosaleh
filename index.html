@@ -2,6 +2,12 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#1E5B47"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
 <style>
+@media print{.fab,.syncbadge,.noprint,#toastRoot,.top .today{display:none!important}body{background:#fff;padding:0}.panel{break-inside:avoid;border-color:#999}}
+.ptitle{margin:4px 0 0;font-size:20px;font-weight:800}
+.trow{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:14px}.tbox{flex:none;width:22px;height:22px;border:2px solid var(--ink);border-radius:4px;display:grid;place-items:center;font-weight:800;color:var(--ok)}
+.bar{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:14px}.bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bt{background:var(--sunk);border-radius:4px;height:12px;overflow:hidden}.bt i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.rt{border-collapse:collapse;width:100%;min-width:560px;font-size:13px}.rt th,.rt td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:right;vertical-align:top}.rt th{color:var(--muted);font-weight:700}.rt tr[data-act]{cursor:pointer}
+[hidden]{display:none!important}
 @font-face{font-family:"Vazirmatn";src:url(vazirmatn.woff2) format("woff2");font-weight:100 900;font-display:swap}
 .syncbadge{font-size:12px;color:var(--ok);background:var(--ok-soft);border:0;border-radius:999px;padding:4px 12px;text-align:right;min-height:30px}.syncbadge.warn{color:var(--warn);background:var(--warn-soft)}
 
@@ -250,8 +256,8 @@ const locSort=(a,b)=>a.barn-b.barn||(a.loc.kind>b.loc.kind?1:a.loc.kind<b.loc.ki
 /* ---------- lookup ---------- */
 function lookup(){
   const q=toEn(ui.q).trim(); const num=/^\d+$/.test(q); const ql=q.toLowerCase();
-  const calfHits=Object.values(calves).filter(cv=>inBarn(cv)&&(toEn(cv.ear).includes(q)||(num&&cv.status!=='left'&&cv.loc&&cv.loc.n===+q)))
-    .sort((a,b)=>(a.status==='left')-(b.status==='left')||(toEn(a.ear)===q?-1:toEn(b.ear)===q?1:0)||locSort(a,b));
+  const calfHits=Object.values(calves).filter(cv=>inBarn(cv)&&(toEn(cv.ear).includes(q)||(num&&!isOut(cv)&&cv.loc&&cv.loc.n===+q)))
+    .sort((a,b)=>isOut(a)-isOut(b)||(toEn(a.ear)===q?-1:toEn(b.ear)===q?1:0)||locSort(a,b));
   const earsShown=new Set(calfHits.map(cv=>toEn(cv.ear)));
   const caseHits=Object.values(cases).filter(c=>{
     if(!inBarn(c))return false;
@@ -267,13 +273,15 @@ function renderToday(){const d=new Date(),k=keyOf(d);document.getElementById('to
 function render(){
   renderToday();
   const v=document.getElementById('view');
-  document.getElementById('fab').hidden=!!(ui.open||ui.calf)||!db;
+  document.getElementById('fab').hidden=!!(ui.open||ui.calf||ui.page)||!db;
   if(ui.open){const c=cases[ui.open]; if(c){v.innerHTML=detailHTML(c);return} ui.open=null}
   if(ui.calf){const cv=calves[ui.calf]; if(cv){v.innerHTML=calfHTML(cv);return} ui.calf=null}
+  if(ui.page==='tech'){v.innerHTML=techHTML();return}
+  if(ui.page==='report'){v.innerHTML=reportHTML();return}
   const all=Object.values(cases);
   const active=all.filter(c=>c.status==='active');
   const pending=active.filter(c=>{const d=caseDays(c);return d.tIdx>=1&&!d.doneToday}).length;
-  const inCalves=Object.values(calves).filter(cv=>cv.status!=='left');
+  const inCalves=Object.values(calves).filter(cv=>!isOut(cv));
   const visitedT=inCalves.filter(cv=>(cv.visits||[]).some(x=>x.day===today())).length;
   let h='';
   
@@ -282,6 +290,7 @@ function render(){
     '<div class="stat"><b>'+fa(active.length)+'</b><span>درمان فعال</span></div>'+
     '<div class="stat warn"><b>'+fa(pending)+'</b><span>درمان مانده</span></div>'+
     '<div class="stat ok"><b>'+fa(visitedT)+'</b><span>بازدید امروز</span></div></div>';
+  h+='<div class="actions"><button type="button" class="btn grow" data-act="page" data-v="tech">لیست امروز تکنسین</button><button type="button" class="btn grow" data-act="page" data-v="report">گزارش مدیریت</button></div>';
   h+='<input class="search big" id="q" type="search" inputmode="search" placeholder="شماره گوش یا شماره باکس…" value="'+esc(ui.q)+'" aria-label="جستجوی گوساله">';
   h+='<div class="filters">'+['all','1','2','3'].map(b=>'<button type="button" class="chip" data-act="barn" data-v="'+b+'" aria-pressed="'+(ui.barn===b)+'">'+(b==='all'?'همه سالن‌ها':BARNS[b].name)+'</button>').join('')+'</div>';
   const qf=document.activeElement&&document.activeElement.id==='q';
@@ -293,7 +302,7 @@ function render(){
     if(r.caseHits.length) h+=(r.calfHits.length?'<div class="sect">درمان‌های بدون پرونده گوساله</div>':'')+r.caseHits.map(cardHTML).join('');
     if(!r.calfHits.length&&!r.caseHits.length){
       h+='<div class="empty"><b>چیزی برای «'+esc(fa(ui.q))+'» پیدا نشد</b><span>این گوساله هنوز ثبت نشده. می‌خواهید ثبتش کنید؟</span><div class="actions" style="justify-content:center">'+
-        '<button type="button" class="btn primary" data-act="visit-new">ثبت بازدید</button><button type="button" class="btn" data-act="case-new">شروع درمان</button></div></div>';
+        '<button type="button" class="btn primary" data-act="visit-new" data-q="1">ثبت بازدید</button><button type="button" class="btn" data-act="case-new" data-q="1">شروع درمان</button></div></div>';
     }
     h+='</div>';
   } else {
@@ -350,9 +359,9 @@ function calfStatusHTML(cv){
 function calfCardHTML(cv){
   const age=cv.birth?dayDiff(cv.birth,today()):null;
   const lv=lastVisit(cv); const vt=lv&&lv.day===today();
-  const left=cv.status==='left';
+  const left=isOut(cv);
   let h='<article class="case b'+cv.barn+(left?' left':'')+'"><button type="button" class="case-main" data-act="calf" data-id="'+cv.id+'">'+locBox(cv)+
-    '<div class="info"><div class="dx">گوش '+esc(fa(cv.ear))+(left?' <span class="pill mut">خارج شده</span>':'')+'</div><div class="meta">'+(age!==null&&age>=0?'سن '+fa(age)+' روز':'تاریخ تولد ثبت نشده')+'</div><div class="tags">'+calfStatusHTML(cv)+'</div></div><div class="dayno" aria-hidden="true">‹</div></button>';
+    '<div class="info"><div class="dx">گوش '+esc(fa(cv.ear))+(left?' <span class="pill '+(cv.status==='dead'?'bad">تلف شده':'mut">خارج شده')+'</span>':'')+'</div><div class="meta">'+(age!==null&&age>=0?'سن '+fa(age)+' روز':'تاریخ تولد ثبت نشده')+'</div><div class="tags">'+calfStatusHTML(cv)+'</div></div><div class="dayno" aria-hidden="true">‹</div></button>';
   if(!left) h+='<div class="case-foot">'+(vt?'<div class="done-today">✓ امروز بازدید شد · '+timeFa(lv.at)+'</div>':'<button type="button" class="log-btn soft" data-act="visit-ok" data-id="'+cv.id+'">بازدید امروز: سالم ✓</button>')+'<button type="button" class="more-btn" data-act="visit-new" data-id="'+cv.id+'">بازدید با جزئیات</button></div>';
   return h+'</article>';
 }
@@ -362,9 +371,10 @@ function calfHTML(cv){
   const act=cs.filter(c=>c.status==='active');
   let h='<button type="button" class="back" data-act="back">→ بازگشت</button>';
   h+='<div class="dhead case b'+cv.barn+'" style="border:0;background:transparent;overflow:visible">'+locBox(cv)+'<div><h2>گوساله گوش '+esc(fa(cv.ear))+'</h2><div class="hint" style="font-size:14px">'+BARNS[cv.barn].full+' · '+locLabel(cv)+' '+fa(cv.loc.n)+(age!==null&&age>=0?' · سن '+fa(age)+' روز':'')+'</div></div></div>';
+  if(cv.status==='dead') h+='<div class="banner" style="background:var(--bad-soft);color:var(--bad)">تلف شده — '+jSlash(cv.death.day)+' · علت: '+esc(cv.death.cause)+(cv.death.note?' · '+esc(cv.death.note):'')+'</div>';
   if(cv.status==='left') h+='<div class="banner">این گوساله از گوساله‌دانی خارج شده'+(cv.leftDay?' ('+jSlash(cv.leftDay)+')':'')+'.</div>';
   h+='<div class="tags">'+calfStatusHTML(cv)+'</div>';
-  if(cv.status!=='left'){
+  if(!isOut(cv)){
     h+='<div class="actions">'+((cv.visits||[]).some(x=>x.day===today())?'':'<button type="button" class="btn primary grow" data-act="visit-ok" data-id="'+cv.id+'">بازدید امروز: سالم ✓</button>')+
       '<button type="button" class="btn grow" data-act="visit-new" data-id="'+cv.id+'">بازدید با جزئیات</button>'+
       (act.length?'':'<button type="button" class="btn grow" data-act="case-new" data-id="'+cv.id+'">شروع درمان</button>')+'</div>';
@@ -373,11 +383,13 @@ function calfHTML(cv){
   // timeline
   const ev=[];
   (cv.visits||[]).forEach(x=>ev.push({k:x.at,type:'v',x}));
+  (cv.moves||[]).forEach(x=>ev.push({k:x.at,type:'m',x}));
   cs.filter(c=>c.status!=='active').forEach(c=>ev.push({k:c.start+'T',type:'c',x:c}));
   ev.sort((a,b)=>a.k<b.k?1:-1);
   h+='<section class="panel"><h3>سابقه بازدید و درمان</h3>';
   if(!ev.length) h+='<div class="hint">هنوز چیزی ثبت نشده.</div>';
   ev.forEach(e=>{
+    if(e.type==='m'){const x=e.x;h+='<div class="dose"><div><div class="when">'+jText(x.day)+' · انتقال</div><div class="what">از '+BARNS[x.from.barn].name+' '+(x.from.loc.kind==='group'?'گروه':'باکس')+' '+fa(x.from.loc.n)+' به '+BARNS[x.to.barn].name+' '+(x.to.loc.kind==='group'?'گروه':'باکس')+' '+fa(x.to.loc.n)+'</div></div></div>';return}
     if(e.type==='v'){const x=e.x,s=VSTAT[x.status]||VSTAT.ok;
       h+='<div class="dose"><div><div class="when">'+jText(x.day)+' · '+timeFa(x.at)+' · بازدید <span class="pill '+s.c+'">'+s.t+'</span></div>'+
         ((x.temp||x.note)?'<div class="extra">'+(x.temp?'دما '+fa(x.temp)+'°C':'')+(x.temp&&x.note?' · ':'')+esc(x.note||'')+'</div>':'')+'</div>'+
@@ -388,7 +400,7 @@ function calfHTML(cv){
   h+='</section>';
   if(ui.calfAsk==='left') h+='<div class="confirm">این گوساله از گوساله‌دانی خارج شده (شیرگیری/انتقال)؟ از فهرست گوساله‌ها برداشته می‌شود ولی سابقه‌اش می‌ماند.<div class="actions"><button type="button" class="btn danger" data-act="calf-left-yes" data-id="'+cv.id+'">بله، خارج شد</button><button type="button" class="btn" data-act="calf-ask-no">نه</button></div></div>';
   else if(ui.calfAsk==='del') h+='<div class="confirm">پرونده این گوساله و همه بازدیدهایش پاک شود؟ (درمان‌ها جدا هستند و می‌مانند.)<div class="actions"><button type="button" class="btn danger" data-act="calf-del-yes" data-id="'+cv.id+'">بله، پاک شود</button><button type="button" class="btn" data-act="calf-ask-no">نه</button></div></div>';
-  else h+='<div class="actions">'+(cv.status==='left'?'<button type="button" class="btn grow" data-act="calf-back" data-id="'+cv.id+'">برگشت به گوساله‌دانی</button>':'<button type="button" class="btn grow" data-act="calf-edit" data-id="'+cv.id+'">جابجایی / ویرایش</button><button type="button" class="btn grow" data-act="calf-left">خروج از گوساله‌دانی</button>')+'</div><button type="button" class="linkbtn danger" style="align-self:flex-start" data-act="calf-del">حذف پرونده گوساله</button>';
+  else h+='<div class="actions">'+(isOut(cv)?'<button type="button" class="btn grow" data-act="calf-back" data-id="'+cv.id+'">'+(cv.status==='dead'?'لغو ثبت تلف':'برگشت به گوساله‌دانی')+'</button>':'<button type="button" class="btn grow" data-act="calf-edit" data-id="'+cv.id+'">انتقال به سالن/باکس دیگر</button><button type="button" class="btn grow" data-act="calf-left">خروج از گوساله‌دانی</button><button type="button" class="btn grow" style="color:var(--bad)" data-act="death" data-id="'+cv.id+'">ثبت تلف</button>')+'</div><button type="button" class="linkbtn danger" style="align-self:flex-start" data-act="calf-del">حذف پرونده گوساله</button>';
   return h;
 }
 function detailHTML(c){
@@ -530,15 +542,15 @@ async function saveCase(){
     if(f._editing){await db.doc('cases/'+f.id).set(Object.assign(doc,{createdAt:f.createdAt||doc.updatedAt}));toast('تغییرات ذخیره شد')}
     else{doc.createdAt=doc.updatedAt;
       if(f._back!==false&&st<today()){for(let k=st;k<today();k=addDays(k,1)){const[y,m,d]=k.split('-').map(Number);doc.doses.push({id:uid(),day:k,at:new Date(y,m-1,d,9,0).toISOString(),items:doc.drugs.map(x=>({name:x.name,dose:x.dose})),temp:null,note:''})}}
-      await db.collection('cases').doc(uid()).set(doc);toast('درمان ثبت شد')}
+      await db.collection('cases').doc(uid()).set(doc);ui.q='';toast('درمان ثبت شد')}
     if(doc.ear&&doc.status==='active'){try{await upsertCalf({ear:doc.ear,barn:doc.barn,loc:doc.loc,birth:bd})}catch(e){}}
     closeSheet();
   }catch(e){renderCaseForm(e&&e.code==='quota_exceeded'?'ظرفیت ذخیره پر شده؛ چند پرونده قدیمی را حذف کنید.':'ذخیره نشد. اتصال را بررسی کنید و دوباره بزنید.')}
 }
 
 /* visit / calf form */
-function visitFormOpen(cv,mode){
-  const t=today(), q=toEn(ui.q).trim();
+function visitFormOpen(cv,mode,useQ){
+  const t=today(), q=useQ?toEn(ui.q).trim():'';
   vform=cv?{mode,id:cv.id,barn:cv.barn,loc:Object.assign({},cv.loc),ear:cv.ear,_birthTxt:cv.birth?jSlash(cv.birth):''}
           :{mode:'visit',barn:+(ui.barn!=='all'?ui.barn:1),loc:{kind:'box',n:''},ear:/^\d+$/.test(q)?q:'',_birthTxt:''};
   Object.assign(vform,{status:'ok',day:t,temp:'',note:''});
@@ -546,7 +558,7 @@ function visitFormOpen(cv,mode){
 }
 function renderVisitForm(errMsg){
   const f=vform, t=today(), edit=f.mode==='edit';
-  let h='<div class="sheet-head"><h2>'+(edit?'جابجایی / ویرایش گوساله':'ثبت بازدید')+'</h2><button type="button" class="x" data-act="close" aria-label="بستن">✕</button></div><div class="sheet-body"><div class="sheet-inner">';
+  let h='<div class="sheet-head"><h2>'+(edit?'انتقال / ویرایش گوساله':'ثبت بازدید')+'</h2><button type="button" class="x" data-act="close" aria-label="بستن">✕</button></div><div class="sheet-body"><div class="sheet-inner">';
   h+=locHTML(f,'v',!!f.id);
   h+='<div class="field"><label for="v-birth">تاریخ تولد</label><input id="v-birth" inputmode="numeric" placeholder="۱۴۰۵/۰۷/۲۰" value="'+esc(f._birthTxt)+'"><span class="hint">اختیاری</span></div>';
   if(!edit){
@@ -572,7 +584,10 @@ async function saveVisit(){
   let bd=''; if(f._birthTxt.trim()){bd=parseJ(f._birthTxt); if(!bd) return renderVisitForm('تاریخ تولد را به شکل ۱۴۰۵/۰۷/۲۰ بنویسید یا خالی بگذارید.')}
   const loc={kind:f.barn===2?f.loc.kind:'box',n:f.loc.n};
   if(f.mode==='edit'){
-    try{await db.doc('calves/'+f.id).update({barn:f.barn,loc,birth:bd,updatedAt:new Date().toISOString()});closeSheet();toast('ذخیره شد')}catch(e){renderVisitForm('ذخیره نشد؛ دوباره بزنید.')}
+    try{const old=calves[f.id];const moved=old.barn!==f.barn||old.loc.kind!==loc.kind||old.loc.n!==loc.n;const u={barn:f.barn,loc,birth:bd};
+      if(moved){const now=new Date().toISOString();u.moves=[...(old.moves||[]),{day:today(),at:now,from:{barn:old.barn,loc:old.loc},to:{barn:f.barn,loc}}];
+        for(const c of casesOfEar(old.ear).filter(c=>c.status==='active')) await db.doc('cases/'+c.id).update({barn:f.barn,loc});}
+      await db.doc('calves/'+f.id).update(u);closeSheet();toast(moved?'انتقال ثبت شد':'ذخیره شد')}catch(e){renderVisitForm('ذخیره نشد؛ دوباره بزنید.')}
     return;
   }
   let temp=null; if(toEn(f.temp).trim()){temp=parseFloat(toEn(f.temp)); if(!(temp>=34&&temp<=43)) return renderVisitForm('دما باید عددی بین ۳۴ و ۴۳ باشد.')}
@@ -580,12 +595,14 @@ async function saveVisit(){
   if(f.day!==today()){const[y,m,d]=f.day.split('-').map(Number);at=new Date(y,m-1,d,now.getHours(),now.getMinutes()).toISOString()}
   const visit={id:uid(),day:f.day,at,status:f.status,temp,note:f.note};
   // another calf already in this individual box?
-  const other=Object.values(calves).find(cv=>cv.status!=='left'&&toEn(cv.ear)!==toEn(f.ear)&&cv.barn===f.barn&&cv.loc.kind==='box'&&loc.kind==='box'&&cv.loc.n===loc.n);
+  const same=!f.id?calves[calfId(f.ear)]:null;
+  if(same&&!isOut(same)&&(same.barn!==f.barn||same.loc.kind!==loc.kind||same.loc.n!==loc.n)&&!f._moveOk){f._moveOk=true;return renderVisitForm('گوش '+fa(f.ear)+' قبلاً در '+BARNS[same.barn].name+' '+locLabel(same)+' '+fa(same.loc.n)+' ثبت شده. اگر واقعاً جابجا شده دوباره «ثبت» را بزنید؛ وگرنه شماره گوش را درست کنید.')}
+  const other=Object.values(calves).find(cv=>!isOut(cv)&&toEn(cv.ear)!==toEn(f.ear)&&cv.barn===f.barn&&cv.loc.kind==='box'&&loc.kind==='box'&&cv.loc.n===loc.n);
   if(other&&!f._occOk){f._occOk=true;return renderVisitForm('باکس '+fa(loc.n)+' به نام گوساله گوش '+fa(other.ear)+' ثبت است. اگر آن گوساله رفته، دوباره «ثبت» را بزنید تا خارج شده حساب شود.')}
   try{
     if(other&&f._occOk) await db.doc('calves/'+other.id).update({status:'left',leftDay:today()});
     await upsertCalf({ear:f.ear,barn:f.barn,loc,birth:bd,visit});
-    closeSheet();toast('بازدید ثبت شد · گوش '+fa(f.ear));
+    ui.q='';closeSheet();render();toast('بازدید ثبت شد · گوش '+fa(f.ear));
   }catch(e){renderVisitForm(e&&e.code==='quota_exceeded'?'ظرفیت ذخیره پر شده.':'ذخیره نشد. اتصال را بررسی کنید و دوباره بزنید.')}
 }
 
@@ -645,8 +662,8 @@ document.addEventListener('click',async e=>{
     case 'calf': ui.calf=id; ui.open=null; ui.calfAsk=null; ui.confirmVisit=null; render(); window.scrollTo(0,0); break;
     case 'back': if(ui.open){ui.open=null}else{ui.calf=null} render(); break;
     case 'new': if(db) chooserOpen(); break;
-    case 'visit-new': if(!db)break; closeSheet(); visitFormOpen(id?calves[id]:null,'visit'); break;
-    case 'case-new': if(!db)break; {const cv=id?calves[id]:null; const q=toEn(ui.q).trim(); closeSheet();
+    case 'visit-new': if(!db)break; closeSheet(); visitFormOpen(id?calves[id]:null,'visit',!!el.dataset.q); break;
+    case 'case-new': if(!db)break; {const cv=id?calves[id]:null; const q=el.dataset.q?toEn(ui.q).trim():''; closeSheet();
       caseFormOpen(null,cv?{barn:cv.barn,loc:cv.loc,ear:cv.ear,birth:cv.birth||''}:(/^\d+$/.test(q)?{ear:q}:null));} break;
     case 'v-totx': readVisitInputs(); {const p={barn:vform.barn,loc:vform.loc,ear:vform.ear,birth:parseJ(vform._birthTxt)||''}; closeSheet(); caseFormOpen(null,p);} break;
     case 'visit-ok': {const cv=calves[id]; try{await db.doc('calves/'+id).update({visits:[...(cv.visits||[]),{id:uid(),day:today(),at:new Date().toISOString(),status:'ok',temp:null,note:''}],updatedAt:new Date().toISOString()});toast('بازدید ثبت شد · گوش '+fa(cv.ear))}catch(err){toast('ذخیره نشد؛ دوباره بزنید')}} break;
@@ -658,20 +675,20 @@ document.addEventListener('click',async e=>{
     case 'calf-del': ui.calfAsk='del'; render(); break;
     case 'calf-ask-no': ui.calfAsk=null; render(); break;
     case 'calf-left-yes': try{await db.doc('calves/'+id).update({status:'left',leftDay:today()});ui.calfAsk=null;toast('خروج ثبت شد')}catch(err){toast('ذخیره نشد')} break;
-    case 'calf-back': try{await db.doc('calves/'+id).update({status:'in',leftDay:null})}catch(err){toast('ذخیره نشد')} break;
+    case 'calf-back': try{await db.doc('calves/'+id).update({status:'in',leftDay:null,death:null})}catch(err){toast('ذخیره نشد')} break;
     case 'calf-del-yes': try{await db.doc('calves/'+id).delete();ui.calf=null;ui.calfAsk=null;toast('پرونده حذف شد');render()}catch(err){toast('حذف نشد')} break;
     case 'edit': caseFormOpen(cases[id]); break;
     case 'dose': doseFormOpen(cases[id]); break;
     case 'close': closeSheet(); break;
     case 'end-ask': ui.ending=true; render(); break;
     case 'end-cancel': ui.ending=false; render(); break;
-    case 'end': try{await db.doc('cases/'+id).update({status:'closed',outcome:v,endDay:today(),updatedAt:new Date().toISOString()});ui.ending=false;toast('درمان بسته شد: '+OUTCOMES[v].t)}catch(err){toast('ذخیره نشد؛ دوباره بزنید')} break;
+    case 'end': if(v==='died'){const c=cases[id];deathFormOpen(c.ear?calves[calfId(c.ear)]:null,c);break} try{await db.doc('cases/'+id).update({status:'closed',outcome:v,endDay:today(),updatedAt:new Date().toISOString()});ui.ending=false;toast('درمان بسته شد: '+OUTCOMES[v].t)}catch(err){toast('ذخیره نشد؛ دوباره بزنید')} break;
     case 'reopen': try{await db.doc('cases/'+id).update({status:'active',outcome:null,endDay:null})}catch(err){toast('ذخیره نشد')} break;
     case 'dose-del': ui.confirmDose=el.dataset.d; render(); break;
     case 'dose-del-no': ui.confirmDose=null; render(); break;
     case 'dose-del-yes': {const c=cases[id];try{await db.doc('cases/'+id).update({doses:(c.doses||[]).filter(z=>z.id!==el.dataset.d)});ui.confirmDose=null;toast('حذف شد')}catch(err){toast('حذف نشد')}} break;
     // shared location
-    case 'l-barn': if(fo===form)readCaseInputs();else readVisitInputs(); fo.barn=+v; if(fo.barn!==2)fo.loc.kind='box'; fo._dupOk=false; fo._occOk=false; fo===form?renderCaseForm():renderVisitForm(); break;
+    case 'l-barn': if(fo===form)readCaseInputs();else readVisitInputs(); fo.barn=+v; if(fo.barn!==2)fo.loc.kind='box'; fo._dupOk=false; fo._occOk=false; fo._moveOk=false; fo===form?renderCaseForm():renderVisitForm(); break;
     case 'l-kind': if(fo===form)readCaseInputs();else readVisitInputs(); fo.loc.kind=v; fo._dupOk=false; fo._occOk=false; fo===form?renderCaseForm():renderVisitForm(); break;
     // case form
     case 'f-startq': readCaseInputs(); form._startTxt=jSlash(addDays(today(),+v)); renderCaseForm(); break;
@@ -700,6 +717,134 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('change',e=>{if((e.target.id==='f-days'||e.target.id==='f-start')&&form){readCaseInputs();renderCaseForm()}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('sheetRoot').innerHTML)closeSheet()});
+
+/* ---------- tech list, report, death ---------- */
+const isOut=cv=>cv.status==='left'||cv.status==='dead';
+const CAUSES=['اسهال','پنومونی','عفونت ناف','ضعف / نارس','کم‌آبی','سخت‌زایی / مرده‌زا','حادثه','نامشخص'];
+const yr=k=>fa(jOf(k).jy);
+function shareText(t){if(navigator.share){navigator.share({text:t}).catch(()=>{})}else copyText(t)}
+function copyText(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('متن کپی شد')).catch(()=>{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');toast('متن کپی شد')}catch(e){}a.remove()})}
+const drugLine=ds=>(ds||[]).map(x=>x.name+(x.dose?' '+fa(x.dose):'')).join('، ');
+function techList(){return Object.values(cases).filter(c=>{if(c.status!=='active')return false;const d=caseDays(c);return d.tIdx>=1&&(ui.techAll||!d.doneToday)}).sort(locSort)}
+function techText(list){let s='لیست درمان امروز — '+jText(today())+' '+yr(today())+'\nگله کشت‌پور · گوساله‌دانی\n';let lb=null;
+  list.forEach(c=>{if(c.barn!==lb){s+='\n*'+BARNS[c.barn].full+'*\n';lb=c.barn}const d=caseDays(c);
+    s+='☐ '+locLabel(c)+' '+fa(c.loc.n)+(c.ear?' (گوش '+fa(c.ear)+')':'')+' — روز '+fa(d.tIdx)+' از '+fa(c.days||1)+'\n    '+drugLine(c.drugs)+'\n'});
+  return s+'\nجمع: '+fa(list.length)+' گوساله'}
+function techHTML(){
+  const list=techList();
+  let h='<button type="button" class="back noprint" data-act="page-back">→ بازگشت</button><h2 class="ptitle">لیست درمان امروز تکنسین</h2><div class="hint">'+jText(today())+' '+yr(today())+' · '+fa(list.length)+' گوساله</div>';
+  h+='<div class="seg noprint"><button type="button" class="chip" data-act="tech-all" data-v="0" aria-pressed="'+!ui.techAll+'">فقط زده‌نشده‌ها</button><button type="button" class="chip" data-act="tech-all" data-v="1" aria-pressed="'+!!ui.techAll+'">همه درمان‌های امروز</button></div>';
+  h+='<div class="actions noprint"><button type="button" class="btn primary grow" data-act="tech-share">ارسال (تلگرام/واتساپ…)</button><button type="button" class="btn grow" data-act="tech-copy">کپی متن</button><button type="button" class="btn grow" data-act="print">چاپ</button></div>';
+  if(!list.length) return h+'<div class="empty"><b>برای امروز درمان باقی‌مانده‌ای نیست ✓</b></div>';
+  let lb=null; h+='<section class="panel">';
+  list.forEach(c=>{const d=caseDays(c);if(c.barn!==lb){h+='<h3 style="margin-top:6px">'+BARNS[c.barn].full+'</h3>';lb=c.barn}
+    h+='<div class="trow"><span class="tbox" aria-hidden="true">'+(d.doneToday?'✓':'')+'</span><div style="min-width:0"><b>'+locLabel(c)+' '+fa(c.loc.n)+'</b>'+(c.ear?' · گوش '+esc(fa(c.ear)):'')+' · روز '+fa(d.tIdx)+' از '+fa(c.days||1)+'<div>'+drugsText(c.drugs)+'</div></div></div>'});
+  return h+'</section>';
+}
+function rangeOf(){return{from:ui.rFrom||addDays(today(),-6),to:ui.rTo||today()}}
+function rep(from,to){
+  const inR=k=>!!k&&k>=from&&k<=to, all=Object.values(cases), cvs=Object.values(calves), add=(o,k)=>o[k]=(o[k]||0)+1;
+  const started=all.filter(c=>inR(c.start));
+  const overl=all.filter(c=>c.start<=to&&(c.status==='active'?today():(c.endDay||c.start))>=from).sort(locSort);
+  const ended=all.filter(c=>c.status!=='active'&&inR(c.endDay)), outc={}; ended.forEach(c=>add(outc,c.outcome||'stopped'));
+  const dx={}; started.forEach(c=>add(dx,c.dx||'بدون تشخیص'));
+  const drugs={}; let doseN=0; all.forEach(c=>(c.doses||[]).forEach(z=>{if(!inR(z.day))return;doseN++;(z.items||[]).forEach(i=>add(drugs,i.name))}));
+  const visits=[]; cvs.forEach(cv=>(cv.visits||[]).forEach(x=>{if(inR(x.day))visits.push(x)}));
+  const deaths=[]; cvs.forEach(cv=>{if(cv.status==='dead'&&cv.death&&inR(cv.death.day))deaths.push(Object.assign({ear:cv.ear,barn:cv.barn,loc:cv.loc},cv.death))});
+  all.forEach(c=>{const cv=c.ear?calves[calfId(c.ear)]:null;if(c.outcome==='died'&&inR(c.endDay)&&!(cv&&cv.status==='dead'))deaths.push({ear:c.ear,barn:c.barn,loc:c.loc,day:c.endDay,cause:c.deathCause||'نامشخص'})});
+  const causes={}; deaths.forEach(d=>add(causes,d.cause||'نامشخص'));
+  const inUnit=cvs.filter(cv=>!isOut(cv)), byBarn={1:0,2:0,3:0}; inUnit.forEach(cv=>byBarn[cv.barn]++);
+  const activeNow=all.filter(c=>c.status==='active');
+  const treatedNowEars=new Set(activeNow.filter(c=>c.ear).map(c=>toEn(c.ear)));
+  return{from,to,started,overl,outc,dx,drugs,doseN,visits,visitedCalves:cvs.filter(cv=>(cv.visits||[]).some(x=>inR(x.day))).length,
+    deaths,causes,inUnit,byBarn,activeNow,healthyNow:inUnit.filter(cv=>!treatedNowEars.has(toEn(cv.ear))).length,
+    sick:new Set(overl.map(c=>c.ear?toEn(c.ear):c.id)).size,watch:visits.filter(x=>x.status==='watch').length};
+}
+const sortE=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]);
+function bars(o,unit){const e=sortE(o);if(!e.length)return'<div class="hint">موردی نیست.</div>';const m=e[0][1];
+  return e.map(([k,n])=>'<div class="bar"><span class="bl">'+esc(k)+'</span><span class="bt"><i style="width:'+Math.max(4,n/m*100)+'%"></i></span><b>'+fa(n)+(unit||'')+'</b></div>').join('')}
+function repText(r){
+  const L=[];L.push('گزارش گوساله‌دانی گله کشت‌پور');L.push(jSlash(r.from)+' تا '+jSlash(r.to));L.push('');
+  L.push('وضعیت الان: '+fa(r.inUnit.length)+' گوساله ثبت‌شده (سالن۱: '+fa(r.byBarn[1])+'، سالن۲: '+fa(r.byBarn[2])+'، سالن۳: '+fa(r.byBarn[3])+')');
+  L.push('تحت درمان الان: '+fa(r.activeNow.length)+' · بدون درمان: '+fa(r.healthyNow));L.push('');
+  L.push('در این بازه: '+fa(r.sick)+' گوساله تحت درمان · '+fa(r.started.length)+' درمان جدید · '+fa(r.doseN)+' نوبت دارو');
+  L.push('بازدید: '+fa(r.visits.length)+' بار ('+fa(r.visitedCalves)+' گوساله)، تحت نظر: '+fa(r.watch));
+  L.push('تلفات: '+fa(r.deaths.length));
+  if(sortE(r.dx).length){L.push('');L.push('تشخیص‌ها:');sortE(r.dx).forEach(([k,n])=>L.push('• '+k+': '+fa(n)))}
+  if(sortE(r.outc).length){L.push('');L.push('نتیجه درمان‌های تمام‌شده:');sortE(r.outc).forEach(([k,n])=>L.push('• '+(OUTCOMES[k]||OUTCOMES.stopped).t+': '+fa(n)))}
+  if(r.deaths.length){L.push('');L.push('علت تلفات:');sortE(r.causes).forEach(([k,n])=>L.push('• '+k+': '+fa(n)))}
+  if(sortE(r.drugs).length){L.push('');L.push('مصرف دارو (تعداد نوبت):');sortE(r.drugs).forEach(([k,n])=>L.push('• '+k+': '+fa(n)))}
+  return L.join('\n');
+}
+function repCSV(r){
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows=[['سالن','جایگاه','شماره','گوش','تشخیص','نوع درمان','داروها','شروع','پایان','وضعیت','نوبت در بازه','علت تلف']];
+  r.overl.forEach(c=>rows.push([BARNS[c.barn].name,locLabel(c),c.loc.n,c.ear,c.dx,(c.txType||[]).join('، '),drugLine(c.drugs),toEn(jSlash(c.start)),c.endDay?toEn(jSlash(c.endDay)):'',c.status==='active'?'در درمان':(OUTCOMES[c.outcome]||OUTCOMES.stopped).t,(c.doses||[]).filter(z=>z.day>=r.from&&z.day<=r.to).length,c.deathCause||'']));
+  r.deaths.filter(d=>!r.overl.some(c=>c.ear&&c.ear===d.ear)).forEach(d=>rows.push([BARNS[d.barn].name,d.loc.kind==='group'?'گروه':'باکس',d.loc.n,d.ear,'','','','',toEn(jSlash(d.day)),'تلف','',d.cause]));
+  return '﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n');
+}
+function reportHTML(){
+  const {from,to}=rangeOf(), r=rep(from,to), t=today();
+  const P=[['امروز',t,t],['دیروز',addDays(t,-1),addDays(t,-1)],['۷ روز',addDays(t,-6),t],['۳۰ روز',addDays(t,-29),t],['این ماه',(()=>{const j=jOf(t);return keyFromD(j2d(j.jy,j.jm,1))})(),t]];
+  let h='<button type="button" class="back noprint" data-act="page-back">→ بازگشت</button><h2 class="ptitle">گزارش مدیریت گوساله‌دانی</h2><div class="hint">'+jSlash(from)+' تا '+jSlash(to)+'</div>';
+  h+='<div class="seg noprint">'+P.map(([l,a,b])=>'<button type="button" class="chip" data-act="r-range" data-a="'+a+'" data-b="'+b+'" aria-pressed="'+(a===from&&b===to)+'">'+l+'</button>').join('')+'</div>';
+  h+='<div class="row2 noprint" style="align-items:end"><div class="field"><label for="r-from">از</label><input id="r-from" inputmode="numeric" value="'+jSlash(from)+'"></div><div class="field"><label for="r-to">تا</label><input id="r-to" inputmode="numeric" value="'+jSlash(to)+'"></div></div><button type="button" class="btn noprint" data-act="r-apply">اعمال بازه دلخواه</button>';
+  h+='<div class="actions noprint"><button type="button" class="btn primary grow" data-act="r-share">ارسال خلاصه</button><button type="button" class="btn grow" data-act="r-csv">فایل اکسل</button><button type="button" class="btn grow" data-act="print">چاپ / PDF</button></div>';
+  h+='<div class="summary"><div class="stat"><b>'+fa(r.inUnit.length)+'</b><span>گوساله ثبت‌شده الان</span></div><div class="stat warn"><b>'+fa(r.activeNow.length)+'</b><span>تحت درمان الان</span></div><div class="stat ok"><b>'+fa(r.healthyNow)+'</b><span>بدون درمان الان</span></div></div>';
+  h+='<div class="hint">سالن ۱: '+fa(r.byBarn[1])+' · سالن ۲: '+fa(r.byBarn[2])+' · سالن ۳: '+fa(r.byBarn[3])+'</div>';
+  h+='<section class="panel"><h3>در این بازه</h3><dl class="kv"><dt>گوساله تحت درمان</dt><dd>'+fa(r.sick)+'</dd><dt>درمان جدید</dt><dd>'+fa(r.started.length)+'</dd><dt>نوبت دارو داده‌شده</dt><dd>'+fa(r.doseN)+'</dd><dt>بازدید</dt><dd>'+fa(r.visits.length)+' بار · '+fa(r.visitedCalves)+' گوساله · تحت نظر '+fa(r.watch)+'</dd><dt>تلفات</dt><dd style="color:'+(r.deaths.length?'var(--bad)':'inherit')+'">'+fa(r.deaths.length)+'</dd></dl></section>';
+  h+='<section class="panel"><h3>تشخیص درمان‌های جدید</h3>'+bars(r.dx)+'</section>';
+  h+='<section class="panel"><h3>نتیجه درمان‌های تمام‌شده</h3>'+bars(Object.fromEntries(sortE(r.outc).map(([k,n])=>[(OUTCOMES[k]||OUTCOMES.stopped).t,n])))+'</section>';
+  h+='<section class="panel"><h3>علت تلفات</h3>'+bars(r.causes)+(r.deaths.length?'<div class="hint">'+r.deaths.map(d=>jText(d.day)+': '+BARNS[d.barn].name+' '+(d.loc.kind==='group'?'گروه':'باکس')+' '+fa(d.loc.n)+(d.ear?' گوش '+esc(fa(d.ear)):'')+' — '+esc(d.cause||'')).join('<br>')+'</div>':'')+'</section>';
+  h+='<section class="panel"><h3>مصرف دارو (تعداد نوبت)</h3>'+bars(r.drugs)+'</section>';
+  h+='<section class="panel"><h3>درمان‌های این بازه ('+fa(r.overl.length)+')</h3><div style="overflow-x:auto"><table class="rt"><thead><tr><th>جایگاه</th><th>گوش</th><th>تشخیص</th><th>داروها</th><th>شروع</th><th>وضعیت</th></tr></thead><tbody>'+
+    r.overl.map(c=>'<tr data-act="open" data-id="'+c.id+'"><td>'+BARNS[c.barn].name+' · '+locLabel(c)+' '+fa(c.loc.n)+'</td><td>'+esc(fa(c.ear||'—'))+'</td><td>'+esc(c.dx||'—')+'</td><td>'+drugsText(c.drugs)+'</td><td>'+jText(c.start)+'</td><td>'+(c.status==='active'?'در درمان':(OUTCOMES[c.outcome]||OUTCOMES.stopped).t)+'</td></tr>').join('')+'</tbody></table></div></section>';
+  return h;
+}
+/* death form */
+let xform=null;
+function deathFormOpen(cv,c){xform={cvId:cv?cv.id:null,caseId:c?c.id:null,day:today(),dayTxt:jSlash(today()),cause:(c&&c.dx)||'',note:''};renderDeathForm()}
+function renderDeathForm(err){
+  const cv=xform.cvId?calves[xform.cvId]:null, c=xform.caseId?cases[xform.caseId]:null, w=cv||c;
+  let h='<div class="sheet-head"><h2>ثبت تلف</h2><button type="button" class="x" data-act="close" aria-label="بستن">✕</button></div><div class="sheet-body"><div class="sheet-inner">';
+  h+='<div class="hint" style="font-size:15px">'+BARNS[w.barn].name+' · '+locLabel(w)+' '+fa(w.loc.n)+(w.ear?' · گوش '+esc(fa(w.ear)):'')+'</div>';
+  h+='<div class="field"><label for="x-day">تاریخ تلف</label><div class="seg"><button type="button" class="chip" data-act="x-day" data-v="0">امروز</button><button type="button" class="chip" data-act="x-day" data-v="-1">دیروز</button><input id="x-day" inputmode="numeric" style="width:130px;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:6px 10px;min-height:42px" value="'+esc(xform.dayTxt)+'"></div></div>';
+  h+='<div class="field"><label for="x-cause">علت تلف</label><input id="x-cause" value="'+esc(xform.cause)+'"><div class="seg">'+CAUSES.map(k=>'<button type="button" class="chip" style="'+SCHIP+'" data-act="x-cause" data-v="'+esc(k)+'" aria-pressed="'+(xform.cause===k)+'">'+k+'</button>').join('')+'</div></div>';
+  h+='<div class="field"><label for="x-note">یادداشت (مثلاً یافته کالبدگشایی)</label><textarea id="x-note">'+esc(xform.note)+'</textarea></div>';
+  h+='</div></div><div class="sheet-foot"><div class="sheet-inner" style="gap:8px">'+(err?'<div class="err">'+esc(err)+'</div>':'')+'<button type="button" class="btn danger" style="min-height:52px" data-act="x-save">ثبت تلف</button></div></div>';
+  openSheet(h);
+}
+function readDeath(){const g=id=>document.getElementById(id);if(g('x-day'))xform.dayTxt=g('x-day').value;if(g('x-cause'))xform.cause=g('x-cause').value.trim();if(g('x-note'))xform.note=g('x-note').value.trim()}
+async function saveDeath(){
+  readDeath(); const k=parseJ(xform.dayTxt); if(!k||k>today()) return renderDeathForm('تاریخ را درست وارد کنید (مثلاً ۱۴۰۵/۰۸/۰۶).');
+  if(!xform.cause) return renderDeathForm('علت تلف را انتخاب یا وارد کنید.');
+  const death={day:k,cause:xform.cause,note:xform.note};
+  try{
+    const cv=xform.cvId?calves[xform.cvId]:null;
+    if(cv){await db.doc('calves/'+cv.id).update({status:'dead',death});
+      for(const c of casesOfEar(cv.ear).filter(c=>c.status==='active')) await db.doc('cases/'+c.id).update({status:'closed',outcome:'died',endDay:k,deathCause:xform.cause});}
+    if(xform.caseId&&cases[xform.caseId]&&cases[xform.caseId].status==='active') await db.doc('cases/'+xform.caseId).update({status:'closed',outcome:'died',endDay:k,deathCause:xform.cause});
+    ui.ending=false; closeSheet(); toast('تلف ثبت شد'); render();
+  }catch(e){renderDeathForm('ذخیره نشد؛ دوباره بزنید.')}
+}
+document.addEventListener('click',async e=>{const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act;
+  switch(a){
+    case 'page': ui.page=el.dataset.v; ui.open=null; ui.calf=null; render(); window.scrollTo(0,0); break;
+    case 'page-back': ui.page=null; render(); break;
+    case 'tech-all': ui.techAll=el.dataset.v==='1'; render(); break;
+    case 'tech-share': shareText(techText(techList())); break;
+    case 'tech-copy': copyText(techText(techList())); break;
+    case 'print': window.print(); break;
+    case 'r-range': ui.rFrom=el.dataset.a; ui.rTo=el.dataset.b; render(); break;
+    case 'r-apply': {const f=parseJ(document.getElementById('r-from').value),t=parseJ(document.getElementById('r-to').value);if(!f||!t||f>t){toast('تاریخ‌ها را به شکل ۱۴۰۵/۰۸/۰۱ وارد کنید');break}ui.rFrom=f;ui.rTo=t;render()} break;
+    case 'r-share': {const r=rangeOf();shareText(repText(rep(r.from,r.to)))} break;
+    case 'r-csv': {const r=rangeOf(),blob=new Blob([repCSV(rep(r.from,r.to))],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(blob),l=document.createElement('a');l.href=u;l.download='gozaresh-'+toEn(jSlash(r.from)).replace(/\//g,'-')+'_'+toEn(jSlash(r.to)).replace(/\//g,'-')+'.csv';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),3000)} break;
+    case 'death': {const cv=calves[el.dataset.id];deathFormOpen(cv,null)} break;
+    case 'x-day': readDeath(); xform.dayTxt=jSlash(addDays(today(),+el.dataset.v)); renderDeathForm(); break;
+    case 'x-cause': readDeath(); xform.cause=el.dataset.v; renderDeathForm(); break;
+    case 'x-save': saveDeath(); break;
+  }
+});
 
 /* ---------- local store (offline) + GitHub sync ---------- */
 const LS='goosaleh-v1';

@@ -411,7 +411,7 @@ function detailHTML(c){
   let h='<button type="button" class="back" data-act="back">→ بازگشت</button>';
   h+='<div class="dhead case b'+c.barn+'" style="border:0;background:transparent;overflow:visible">'+locBox(c)+'<div><h2>'+esc(c.dx||'بدون تشخیص')+'</h2><div class="hint" style="font-size:14px">'+BARNS[c.barn].full+' · '+locLabel(c)+' '+fa(c.loc.n)+(c.ear?' · گوش '+esc(fa(c.ear)):'')+'</div></div></div>';
   {const pv=c.prevId&&cases[c.prevId], nx=c.nextId&&cases[c.nextId];
-   if(pv) h+='<button type="button" class="banner rowbtn" style="border:0;border-radius:12px" data-act="open" data-id="'+pv.id+'">درمان '+ORDN[chainNo(c)]+' — قبلش '+fa((pv.doses||[]).length)+' نوبت '+esc(drugLine(pv.drugs))+' جواب نداد'+(c.changeReason?' ('+esc(c.changeReason)+')':'')+' ‹</button>';
+   if(pv) h+='<button type="button" class="banner rowbtn" style="border:0;border-radius:12px" data-act="open" data-id="'+pv.id+'">درمان '+ORDN[chainNo(c)]+' — قبلش: '+esc(drugLine(pv.drugs))+' ('+fa((pv.doses||[]).length)+' نوبت)'+(c.changeReason?' · علت تغییر: '+esc(c.changeReason):'')+' ‹</button>';
    if(nx) h+='<button type="button" class="banner rowbtn" style="border:0;border-radius:12px" data-act="open" data-id="'+nx.id+'">این درمان '+jText(c.endDay)+' عوض شد → درمان جدید: '+esc(drugLine(nx.drugs))+' ‹</button>';}
   if(cv&&ui.calf!==cv.id) h+='<button type="button" class="linkbtn" style="align-self:flex-start;color:var(--accent);font-weight:700" data-act="calf" data-id="'+cv.id+'">پرونده کامل گوساله ›</button>';
   if(c.status!=='active'){const o=OUTCOMES[c.outcome]||OUTCOMES.stopped;h+='<div><span class="pill '+o.c+'">'+o.t+'</span> <span class="hint">'+(c.endDay?jSlash(c.endDay):'')+'</span></div>'}

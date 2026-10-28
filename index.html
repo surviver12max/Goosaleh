@@ -215,7 +215,9 @@ const FLUIDS=['رینگر','نمکی','بی‌کربنات ۱٫۳','بی‌کر�
 const SCHIP='min-height:36px;padding:3px 11px;font-size:13px';
 function pickChips(act,list,have){return list.map(s=>'<button type="button" class="chip" style="'+SCHIP+'" data-act="'+act+'" data-v="'+esc(s)+'" aria-pressed="'+have.includes(s)+'">'+esc(s)+'</button>').join('')}
 function toggleDrug(arr,v,extra){const i=arr.findIndex(d=>d.name===v);if(i>=0){arr.splice(i,1);return}const empty=arr.find(d=>!d.name);if(empty)Object.assign(empty,{name:v},extra||{});else arr.push(Object.assign({name:v,dose:''},extra||{}))}
-const OUTCOMES={cured:{t:'بهبود',c:'ok'},died:{t:'تلف',c:'bad'},referred:{t:'ارجاع به دامپزشک',c:'warn'},stopped:{t:'قطع درمان',c:'mut'}};
+const OUTCOMES={cured:{t:'بهبود',c:'ok'},died:{t:'تلف',c:'bad'},referred:{t:'ارجاع به دامپزشک',c:'warn'},stopped:{t:'قطع درمان',c:'mut'},changed:{t:'تغییر درمان',c:'warn'}};
+const ORDN=['','اول','دوم','سوم','چهارم','پنجم','ششم'];
+function chainNo(c){let n=1,x=c;while(x&&x.prevId&&cases[x.prevId]&&n<20){n++;x=cases[x.prevId]}return n}
 const locLabel=c=>c.loc.kind==='group'?'گروه':'باکس';
 
 /* ---------- state ---------- */
@@ -332,7 +334,7 @@ function drugsText(ds){return (ds||[]).filter(d=>d.name).map(d=>esc(d.name)+(d.d
 function cardHTML(c){
   const d=caseDays(c);
   const over=c.status==='active'&&d.tIdx>(c.days||1);
-  const meta=[c.ear?'گوش '+esc(fa(c.ear)):'',c.txType&&c.txType.length?esc(c.txType.join('، ')):'','شروع '+jText(c.start)].filter(Boolean).join(' · ');
+  const meta=[chainNo(c)>1?'<b style="color:var(--warn)">درمان '+ORDN[Math.min(chainNo(c),6)]+'</b>':'',c.ear?'گوش '+esc(fa(c.ear)):'',c.txType&&c.txType.length?esc(c.txType.join('، ')):'','شروع '+jText(c.start)].filter(Boolean).join(' · ');
   let right;
   if(c.status==='active') right='<div class="dayno'+(over?' over':'')+'">روز '+fa(Math.max(d.tIdx,0))+'<small>از '+fa(c.days||1)+(over?' · تمام':'')+'</small></div>';
   else {const o=OUTCOMES[c.outcome]||OUTCOMES.stopped;right='<div class="dayno"><span class="pill '+o.c+'">'+o.t+'</span><small>'+(c.endDay?jText(c.endDay):'')+'</small></div>'}
@@ -408,6 +410,9 @@ function detailHTML(c){
   const cv=c.ear?calves[calfId(c.ear)]:null;
   let h='<button type="button" class="back" data-act="back">→ بازگشت</button>';
   h+='<div class="dhead case b'+c.barn+'" style="border:0;background:transparent;overflow:visible">'+locBox(c)+'<div><h2>'+esc(c.dx||'بدون تشخیص')+'</h2><div class="hint" style="font-size:14px">'+BARNS[c.barn].full+' · '+locLabel(c)+' '+fa(c.loc.n)+(c.ear?' · گوش '+esc(fa(c.ear)):'')+'</div></div></div>';
+  {const pv=c.prevId&&cases[c.prevId], nx=c.nextId&&cases[c.nextId];
+   if(pv) h+='<button type="button" class="banner rowbtn" style="border:0;border-radius:12px" data-act="open" data-id="'+pv.id+'">درمان '+ORDN[chainNo(c)]+' — قبلش '+fa((pv.doses||[]).length)+' نوبت '+esc(drugLine(pv.drugs))+' جواب نداد'+(c.changeReason?' ('+esc(c.changeReason)+')':'')+' ‹</button>';
+   if(nx) h+='<button type="button" class="banner rowbtn" style="border:0;border-radius:12px" data-act="open" data-id="'+nx.id+'">این درمان '+jText(c.endDay)+' عوض شد → درمان جدید: '+esc(drugLine(nx.drugs))+' ‹</button>';}
   if(cv&&ui.calf!==cv.id) h+='<button type="button" class="linkbtn" style="align-self:flex-start;color:var(--accent);font-weight:700" data-act="calf" data-id="'+cv.id+'">پرونده کامل گوساله ›</button>';
   if(c.status!=='active'){const o=OUTCOMES[c.outcome]||OUTCOMES.stopped;h+='<div><span class="pill '+o.c+'">'+o.t+'</span> <span class="hint">'+(c.endDay?jSlash(c.endDay):'')+'</span></div>'}
   h+='<section class="panel"><h3>روزهای درمان ('+fa(c.days||1)+' روز برنامه)</h3><div class="daystrip">'+d.cells.map(x=>{
@@ -434,8 +439,8 @@ function detailHTML(c){
   });
   h+='</section>';
   if(c.status==='active'){
-    if(ui.ending) h+='<section class="panel"><h3>نتیجه درمان چه بود؟</h3><div class="seg">'+Object.entries(OUTCOMES).map(([k,o])=>'<button type="button" class="chip" data-act="end" data-id="'+c.id+'" data-v="'+k+'">'+o.t+'</button>').join('')+'</div><button type="button" class="linkbtn" data-act="end-cancel">انصراف</button></section>';
-    else h+='<div class="actions"><button type="button" class="btn grow" data-act="edit" data-id="'+c.id+'">ویرایش مشخصات</button><button type="button" class="btn grow" data-act="end-ask">پایان درمان</button></div>';
+    if(ui.ending) h+='<section class="panel"><h3>نتیجه درمان چه بود؟</h3><div class="seg">'+Object.entries(OUTCOMES).filter(([k])=>k!=='changed').map(([k,o])=>'<button type="button" class="chip" data-act="end" data-id="'+c.id+'" data-v="'+k+'">'+o.t+'</button>').join('')+'</div><button type="button" class="linkbtn" data-act="end-cancel">انصراف</button></section>';
+    else h+='<div class="actions"><button type="button" class="btn grow" style="color:var(--warn)" data-act="change-tx" data-id="'+c.id+'">تغییر درمان</button><button type="button" class="btn grow" data-act="edit" data-id="'+c.id+'">ویرایش مشخصات</button><button type="button" class="btn grow" data-act="end-ask">پایان درمان</button></div>';
   } else h+='<div class="actions"><button type="button" class="btn grow" data-act="reopen" data-id="'+c.id+'">بازگرداندن به درمان فعال</button><button type="button" class="btn grow" data-act="edit" data-id="'+c.id+'">ویرایش</button></div>';
   return h;
 }
@@ -495,7 +500,8 @@ function caseFormOpen(c,pre){
 }
 function renderCaseForm(errMsg){
   const f=form, t=today(), sugg=drugSuggestions();
-  let h='<div class="sheet-head"><h2>'+(f._editing?'ویرایش درمان':'شروع درمان')+'</h2><button type="button" class="x" data-act="close" aria-label="بستن">✕</button></div><div class="sheet-body"><div class="sheet-inner">';
+  let h='<div class="sheet-head"><h2>'+(f._editing?'ویرایش درمان':f._changeFrom?'تغییر درمان':'شروع درمان')+'</h2><button type="button" class="x" data-act="close" aria-label="بستن">✕</button></div><div class="sheet-body"><div class="sheet-inner">';
+  if(f._changeFrom&&cases[f._changeFrom]){const o=cases[f._changeFrom];h+='<div class="banner">درمان قبلی: '+esc(drugLine(o.drugs))+' · '+fa((o.doses||[]).length)+' نوبت از '+jText(o.start)+'. با ثبت، آن درمان بسته و این درمان از روز ۱ شروع می‌شود.</div>'}
   h+=locHTML(f,'f',false);
   h+='<div class="row2"><div class="field"><label for="f-start">تاریخ شروع درمان</label><input id="f-start" inputmode="numeric" placeholder="۱۴۰۵/۰۸/۰۶" value="'+esc(f._startTxt)+'"><div class="seg">'+
      [[0,'امروز'],[-1,'دیروز'],[-2,'پریروز']].map(([o,l])=>'<button type="button" class="chip" style="'+SCHIP+'" data-act="f-startq" data-v="'+o+'">'+l+'</button>').join('')+'</div></div>'+
@@ -503,6 +509,7 @@ function renderCaseForm(errMsg){
   {const ps=parseJ(f._startTxt);const back=ps&&!f._editing?dayDiff(ps,t):0;
    if(back>0) h+='<label class="confirm" style="background:var(--accent-soft);color:var(--ink);flex-direction:row;align-items:center;gap:10px"><input type="checkbox" id="f-back" '+(f._back!==false?'checked':'')+' style="width:24px;height:24px;flex:none;accent-color:var(--accent)"><span>داروهای روز ۱'+(back>1?' تا روز '+fa(back):'')+' قبلاً زده شده — ثبت شود<br><span class="hint">امروز روز '+fa(back+1)+' درمان است و جدا ثبت می‌شود</span></span></label>';}
   h+='<div class="field"><label for="f-dx">تشخیص اولیه</label><input id="f-dx" autocomplete="off" value="'+esc(f.dx)+'"><div class="seg">'+DX.map(x=>'<button type="button" class="chip" style="'+SCHIP+'" data-act="f-dx" data-v="'+esc(x)+'">'+x+'</button>').join('')+'</div></div>';
+  if(f._changeFrom) h+='<div class="field"><label for="f-reason">علت تغییر</label><input id="f-reason" value="'+esc(f.changeReason||'')+'"><div class="seg">'+['عدم پاسخ به درمان','بدتر شدن','نتیجه آنتی‌بیوگرام','عارضه دارویی','تمام شدن دارو'].map(x=>'<button type="button" class="chip" style="'+SCHIP+'" data-act="f-reason" data-v="'+x+'">'+x+'</button>').join('')+'</div></div>';
   h+='<div class="field"><span class="lbl">نوع درمان</span><div class="seg">'+TYPES.map(x=>'<button type="button" class="chip" data-act="f-type" data-v="'+x+'" aria-pressed="'+((f.txType||[]).includes(x))+'">'+x+'</button>').join('')+'</div></div>';
   h+='<div class="field"><span class="lbl">داروی درمانی و دوز</span>'+f.drugs.map((d,i)=>'<div class="drugrow"><input id="f-dn-'+i+'" placeholder="نام دارو" autocomplete="off" value="'+esc(d.name)+'" aria-label="نام دارو '+fa(i+1)+'"><input id="f-dd-'+i+'" placeholder="دوز، مثلاً ۵ سی‌سی" autocomplete="off" value="'+esc(d.dose)+'" aria-label="دوز '+fa(i+1)+'"><button type="button" class="x" data-act="f-drug-del" data-v="'+i+'" aria-label="حذف دارو">✕</button></div>').join('')+
      '<div class="seg"><button type="button" class="chip" data-act="f-drug-add">+ ردیف خالی</button></div>'+
@@ -524,6 +531,7 @@ function readCaseInputs(){
   form._startTxt=v('f-start'); form._birthTxt=v('f-birth');
   {const b=document.getElementById('f-back'); if(b) form._back=b.checked;}
   form.dx=v('f-dx').trim(); form.note=v('f-note').trim();
+  {const r=document.getElementById('f-reason'); if(r) form.changeReason=r.value.trim();}
   form.drugs=form.drugs.map((d,i)=>({name:v('f-dn-'+i).trim(),dose:v('f-dd-'+i).trim()}));
   const extra=parseInt(toEn(v('f-days')),10); if(extra>0) form.days=Math.min(extra,30);
 }
@@ -534,15 +542,17 @@ async function saveCase(){
   let bd=''; if(f._birthTxt.trim()){bd=parseJ(f._birthTxt); if(!bd) return renderCaseForm('تاریخ تولد را به شکل ۱۴۰۵/۰۷/۲۰ بنویسید یا خالی بگذارید.')}
   if(bd&&bd>st) return renderCaseForm('تاریخ تولد بعد از شروع درمان است؛ تاریخ‌ها را بررسی کنید.');
   if(!f.drugs.some(d=>d.name)) return renderCaseForm('دست‌کم نام یک دارو را وارد کنید.');
-  const dup=Object.values(cases).find(c=>c.status==='active'&&c.id!==f.id&&c.barn===f.barn&&c.loc.kind===f.loc.kind&&c.loc.n===f.loc.n&&(!isG||c.ear===f.ear));
+  const dup=Object.values(cases).find(c=>c.status==='active'&&c.id!==f.id&&c.id!==f._changeFrom&&c.barn===f.barn&&c.loc.kind===f.loc.kind&&c.loc.n===f.loc.n&&(!isG||c.ear===f.ear));
   if(dup&&!f._dupOk){f._dupOk=true;return renderCaseForm('این '+(isG?'گوساله':'باکس')+' همین الان یک درمان فعال دارد (شروع '+jText(dup.start)+'). اگر مطمئنید دوباره «ثبت» را بزنید.')}
   const doc={barn:f.barn,loc:{kind:f.barn===2?f.loc.kind:'box',n:f.loc.n},ear:f.ear,birth:bd,start:st,dx:f.dx,txType:f.txType||[],
-    drugs:f.drugs.filter(d=>d.name),days:f.days||1,note:f.note,status:f.status||'active',outcome:f.outcome||null,endDay:f.endDay||null,doses:f.doses||[],updatedAt:new Date().toISOString()};
+    drugs:f.drugs.filter(d=>d.name),days:f.days||1,note:f.note,status:f.status||'active',outcome:f.outcome||null,endDay:f.endDay||null,doses:f.doses||[],prevId:f.prevId||f._changeFrom||null,nextId:f.nextId||null,changeReason:f.changeReason||'',updatedAt:new Date().toISOString()};
   try{
     if(f._editing){await db.doc('cases/'+f.id).set(Object.assign(doc,{createdAt:f.createdAt||doc.updatedAt}));toast('تغییرات ذخیره شد')}
     else{doc.createdAt=doc.updatedAt;
       if(f._back!==false&&st<today()){for(let k=st;k<today();k=addDays(k,1)){const[y,m,d]=k.split('-').map(Number);doc.doses.push({id:uid(),day:k,at:new Date(y,m-1,d,9,0).toISOString(),items:doc.drugs.map(x=>({name:x.name,dose:x.dose})),temp:null,note:''})}}
-      await db.collection('cases').doc(uid()).set(doc);ui.q='';toast('درمان ثبت شد')}
+      const nid=uid();await db.collection('cases').doc(nid).set(doc);
+      if(f._changeFrom){await db.doc('cases/'+f._changeFrom).update({status:'closed',outcome:'changed',endDay:st,nextId:nid});ui.open=nid}
+      ui.q='';toast(f._changeFrom?'درمان جدید ثبت شد':'درمان ثبت شد')}
     if(doc.ear&&doc.status==='active'){try{await upsertCalf({ear:doc.ear,barn:doc.barn,loc:doc.loc,birth:bd})}catch(e){}}
     closeSheet();
   }catch(e){renderCaseForm(e&&e.code==='quota_exceeded'?'ظرفیت ذخیره پر شده؛ چند پرونده قدیمی را حذف کنید.':'ذخیره نشد. اتصال را بررسی کنید و دوباره بزنید.')}
@@ -678,6 +688,8 @@ document.addEventListener('click',async e=>{
     case 'calf-back': try{await db.doc('calves/'+id).update({status:'in',leftDay:null,death:null})}catch(err){toast('ذخیره نشد')} break;
     case 'calf-del-yes': try{await db.doc('calves/'+id).delete();ui.calf=null;ui.calfAsk=null;toast('پرونده حذف شد');render()}catch(err){toast('حذف نشد')} break;
     case 'edit': caseFormOpen(cases[id]); break;
+    case 'change-tx': {const c=cases[id];caseFormOpen(null,{barn:c.barn,loc:c.loc,ear:c.ear,birth:c.birth||'',dx:c.dx,txType:c.txType||[],days:c.days||5,drugs:[{name:'',dose:''}],_changeFrom:c.id})} break;
+    case 'f-reason': readCaseInputs(); form.changeReason=v; renderCaseForm(); break;
     case 'dose': doseFormOpen(cases[id]); break;
     case 'close': closeSheet(); break;
     case 'end-ask': ui.ending=true; render(); break;

@@ -210,7 +210,7 @@ const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},se
 const BARNS={1:{name:'سالن ۱',full:'سالن ۱ — زایشگاه',max:75},2:{name:'سالن ۲',full:'سالن ۲',maxBox:10,maxGroup:8},3:{name:'سالن ۳',full:'سالن ۳ — بیرون',max:57}};
 const DX=['اسهال','پنومونی','عفونت ناف','تب','ورم مفاصل','کم‌آبی'];
 const TYPES=['تزریقی','خوراکی','مایع‌درمانی','موضعی'];
-const DRUGS=['سفتریاکسون','ماربوفلوکساسین','جنتامایسین','اموکسی','ملوکسی‌کام','دگزامتازون','دوفاسیت','فسفر','ب کمپلکس','برم‌هگزین','پانتریسول','دراکسین'];
+const DRUGS=['سفتریاکسون','ماربوفلوکساسین','جنتامایسین','اموکسی','ملوکسی‌کام','دگزامتازون','دوفاسیت','فسفر','ب کمپلکس','برم‌هگزین','پانتریسول','دراکسین','لینکواسپکتین','آمینوفلین','کتوفن'];
 const FLUIDS=['رینگر','نمکی','بی‌کربنات ۱٫۳','بی‌کربنات ۸٫۴','CMP','هایپر قندی'];
 const SCHIP='min-height:36px;padding:3px 11px;font-size:13px';
 function pickChips(act,list,have){return list.map(s=>'<button type="button" class="chip" style="'+SCHIP+'" data-act="'+act+'" data-v="'+esc(s)+'" aria-pressed="'+have.includes(s)+'">'+esc(s)+'</button>').join('')}

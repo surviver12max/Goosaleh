@@ -210,7 +210,9 @@ const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},se
 const BARNS={1:{name:'سالن ۱',full:'سالن ۱ — زایشگاه',max:75},2:{name:'سالن ۲',full:'سالن ۲',maxBox:10,maxGroup:8},3:{name:'سالن ۳',full:'سالن ۳ — بیرون',max:57}};
 const DX=['اسهال','پنومونی','عفونت ناف','تب','ورم مفاصل','کم‌آبی'];
 const TYPES=['تزریقی','خوراکی','مایع‌درمانی','موضعی'];
-const DRUGS=['سفتریاکسون','ماربوفلوکساسین','جنتامایسین','اموکسی','ملوکسی‌کام','دگزامتازون','دوفاسیت','فسفر','ب کمپلکس','برم‌هگزین','پانتریسول','دراکسین','لینکواسپکتین','آمینوفلین','کتوفن'];
+const DRUGS=['سفتریاکسون','ماربوفلوکساسین','جنتامایسین','اموکسی','ملوکسی‌کام','دگزامتازون','دوفاسیت','فسفر','ب کمپلکس','برم‌هگزین','پانتریسول','دراکسین','لینکواسپکتین','آمینوفلین','کتوفن','قرص بیسموت','ORS'];
+const ORAL=['قرص بیسموت','ORS'];
+const capOf=(barn,kind)=>kind==='group'?10:barn===3?2:1;
 const FLUIDS=['رینگر','نمکی','بی‌کربنات ۱٫۳','بی‌کربنات ۸٫۴','CMP','هایپر قندی'];
 const SCHIP='min-height:36px;padding:3px 11px;font-size:13px';
 function pickChips(act,list,have){return list.map(s=>'<button type="button" class="chip" style="'+SCHIP+'" data-act="'+act+'" data-v="'+esc(s)+'" aria-pressed="'+have.includes(s)+'">'+esc(s)+'</button>').join('')}
@@ -464,9 +466,9 @@ function locHTML(o,p,lockEar){
   const b=BARNS[o.barn], isG=o.barn===2&&o.loc.kind==='group';
   const max=o.barn===2?(isG?b.maxGroup:b.maxBox):b.max;
   let h='<div class="field"><span class="lbl">سالن</span><div class="seg">'+[1,2,3].map(n=>'<button type="button" class="chip" data-act="l-barn" data-f="'+p+'" data-v="'+n+'" aria-pressed="'+(o.barn===n)+'">'+BARNS[n].full+'</button>').join('')+'</div></div>';
-  if(o.barn===2) h+='<div class="field"><span class="lbl">جایگاه در سالن ۲</span><div class="seg"><button type="button" class="chip" data-act="l-kind" data-f="'+p+'" data-v="box" aria-pressed="'+(!isG)+'">باکس انفرادی (۱–۱۰)</button><button type="button" class="chip" data-act="l-kind" data-f="'+p+'" data-v="group" aria-pressed="'+isG+'">محیط گروهی (۱–۸)</button></div></div>';
+  if(o.barn===2) h+='<div class="field"><span class="lbl">جایگاه در سالن ۲</span><div class="seg"><button type="button" class="chip" data-act="l-kind" data-f="'+p+'" data-v="box" aria-pressed="'+(!isG)+'">باکس انفرادی (۱–۱۰)</button><button type="button" class="chip" data-act="l-kind" data-f="'+p+'" data-v="group" aria-pressed="'+isG+'">محیط گروهی (۱–۸، تا ۱۰ گوساله)</button></div></div>';
   h+='<div class="row2"><div class="field"><label for="'+p+'-n">شماره '+(isG?'محیط گروهی':'باکس')+' (۱ تا '+fa(max)+')</label><input id="'+p+'-n" inputmode="numeric" autocomplete="off" value="'+esc(o.loc.n===''?'':fa(o.loc.n))+'"></div>'+
-     '<div class="field"><label for="'+p+'-ear">شماره گوش'+(p==='v'||isG?' (لازم)':'')+'</label><input id="'+p+'-ear" inputmode="numeric" autocomplete="off" value="'+esc(fa(o.ear||''))+'"'+(lockEar?' readonly style="background:var(--sunk)"':'')+'></div></div>';
+     '<div class="field"><label for="'+p+'-ear">شماره گوش'+(p==='v'||capOf(o.barn,o.loc.kind)>1?' (لازم)':'')+'</label><input id="'+p+'-ear" inputmode="numeric" autocomplete="off" value="'+esc(fa(o.ear||''))+'"'+(lockEar?' readonly style="background:var(--sunk)"':'')+'></div></div>';
   return h;
 }
 function readLoc(o,p){
@@ -478,7 +480,7 @@ function checkLoc(o,needEar){
   const b=BARNS[o.barn], isG=o.barn===2&&o.loc.kind==='group';
   const max=o.barn===2?(isG?b.maxGroup:b.maxBox):b.max;
   if(!o.loc.n||o.loc.n<1||o.loc.n>max) return 'شماره '+(isG?'محیط گروهی':'باکس')+' باید بین ۱ و '+fa(max)+' باشد.';
-  if((needEar||isG)&&!o.ear) return 'شماره گوش را وارد کنید.';
+  if((needEar||capOf(o.barn,o.loc.kind)>1)&&!o.ear) return 'شماره گوش را وارد کنید'+(capOf(o.barn,o.loc.kind)>1?' (در این جایگاه چند گوساله جا می‌شود).':'.');
   return '';
 }
 async function upsertCalf(x){
@@ -542,7 +544,7 @@ async function saveCase(){
   let bd=''; if(f._birthTxt.trim()){bd=parseJ(f._birthTxt); if(!bd) return renderCaseForm('تاریخ تولد را به شکل ۱۴۰۵/۰۷/۲۰ بنویسید یا خالی بگذارید.')}
   if(bd&&bd>st) return renderCaseForm('تاریخ تولد بعد از شروع درمان است؛ تاریخ‌ها را بررسی کنید.');
   if(!f.drugs.some(d=>d.name)) return renderCaseForm('دست‌کم نام یک دارو را وارد کنید.');
-  const dup=Object.values(cases).find(c=>c.status==='active'&&c.id!==f.id&&c.id!==f._changeFrom&&c.barn===f.barn&&c.loc.kind===f.loc.kind&&c.loc.n===f.loc.n&&(!isG||c.ear===f.ear));
+  const dup=Object.values(cases).find(c=>c.status==='active'&&c.id!==f.id&&c.id!==f._changeFrom&&c.barn===f.barn&&c.loc.kind===f.loc.kind&&c.loc.n===f.loc.n&&(capOf(f.barn,f.loc.kind)===1||toEn(c.ear)===toEn(f.ear)));
   if(dup&&!f._dupOk){f._dupOk=true;return renderCaseForm('این '+(isG?'گوساله':'باکس')+' همین الان یک درمان فعال دارد (شروع '+jText(dup.start)+'). اگر مطمئنید دوباره «ثبت» را بزنید.')}
   const doc={barn:f.barn,loc:{kind:f.barn===2?f.loc.kind:'box',n:f.loc.n},ear:f.ear,birth:bd,start:st,dx:f.dx,txType:f.txType||[],
     drugs:f.drugs.filter(d=>d.name),days:f.days||1,note:f.note,status:f.status||'active',outcome:f.outcome||null,endDay:f.endDay||null,doses:f.doses||[],prevId:f.prevId||f._changeFrom||null,nextId:f.nextId||null,changeReason:f.changeReason||'',updatedAt:new Date().toISOString()};
@@ -607,7 +609,9 @@ async function saveVisit(){
   // another calf already in this individual box?
   const same=!f.id?calves[calfId(f.ear)]:null;
   if(same&&!isOut(same)&&(same.barn!==f.barn||same.loc.kind!==loc.kind||same.loc.n!==loc.n)&&!f._moveOk){f._moveOk=true;return renderVisitForm('گوش '+fa(f.ear)+' قبلاً در '+BARNS[same.barn].name+' '+locLabel(same)+' '+fa(same.loc.n)+' ثبت شده. اگر واقعاً جابجا شده دوباره «ثبت» را بزنید؛ وگرنه شماره گوش را درست کنید.')}
-  const other=Object.values(calves).find(cv=>!isOut(cv)&&toEn(cv.ear)!==toEn(f.ear)&&cv.barn===f.barn&&cv.loc.kind==='box'&&loc.kind==='box'&&cv.loc.n===loc.n);
+  const cap=capOf(f.barn,loc.kind), occ=Object.values(calves).filter(cv=>!isOut(cv)&&toEn(cv.ear)!==toEn(f.ear)&&cv.barn===f.barn&&cv.loc.kind===loc.kind&&cv.loc.n===loc.n);
+  const other=cap===1?occ[0]:null;
+  if(cap>1&&occ.length>=cap&&!f._occOk){f._occOk=true;return renderVisitForm('این '+(loc.kind==='group'?'محیط گروهی':'باکس')+' پر است ('+fa(occ.length)+' از '+fa(cap)+': گوش '+occ.map(x=>fa(x.ear)).join('، ')+'). اگر یکی رفته، از پرونده‌اش «خروج» یا «انتقال» بزنید؛ یا اگر مطمئنید دوباره «ثبت» را بزنید.')}
   if(other&&!f._occOk){f._occOk=true;return renderVisitForm('باکس '+fa(loc.n)+' به نام گوساله گوش '+fa(other.ear)+' ثبت است. اگر آن گوساله رفته، دوباره «ثبت» را بزنید تا خارج شده حساب شود.')}
   try{
     if(other&&f._occOk) await db.doc('calves/'+other.id).update({status:'left',leftDay:today()});
@@ -710,6 +714,7 @@ document.addEventListener('click',async e=>{
     case 'f-drug-del': readCaseInputs(); form.drugs.splice(+v,1); if(!form.drugs.length)form.drugs=[{name:'',dose:''}]; renderCaseForm(); break;
     case 'f-drug-sugg': readCaseInputs(); toggleDrug(form.drugs,v); if(!form.drugs.length)form.drugs=[{name:'',dose:''}];
       if(FLUIDS.includes(v)&&form.drugs.some(d=>d.name===v)&&!(form.txType||[]).includes('مایع‌درمانی')){form.txType=TYPES.filter(x=>(form.txType||[]).includes(x)||x==='مایع‌درمانی')}
+      if(ORAL.includes(v)&&form.drugs.some(d=>d.name===v)&&!(form.txType||[]).includes('خوراکی')){form.txType=TYPES.filter(x=>(form.txType||[]).includes(x)||x==='خوراکی')}
       renderCaseForm(); break;
     case 'f-days': readCaseInputs(); form.days=+v; renderCaseForm(); break;
     case 'f-save': saveCase(); break;

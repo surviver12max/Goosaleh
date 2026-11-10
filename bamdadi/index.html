@@ -924,17 +924,17 @@ window.addEventListener('online',()=>sync());
 setInterval(()=>{if(dirty)sync()},5*60000);
 function syncText(){
   if(syncing)return'در حال پشتیبان‌گیری…';
-  if(!cfgGet('token'))return'پشتیبان آنلاین تنظیم نشده';
+  if(!cfgGet('token')){const lf=cfgGet('lastFile');if(!lf)return'⚠ هنوز فایل پشتیبان نگرفته‌اید — اینجا بزنید';const d=dayDiff(keyOf(new Date(lf)),today());return(d>=7?'⚠ ':'✓ ')+'آخرین فایل پشتیبان: '+(d===0?'امروز':fa(d)+' روز پیش')+(d>=7?' — وقت پشتیبان است':'')}
   const l=cfgGet('last'); const t=l?jText(keyOf(new Date(l)))+' '+timeFa(l):'هنوز نه';
   return (dirty?'تغییرات ذخیره‌نشده آنلاین · ':'✓ ')+'آخرین پشتیبان: '+t;
 }
-function renderSyncBadge(){const b=document.getElementById('syncBadge');if(b){b.textContent=syncText();b.className='syncbadge'+(dirty||!cfgGet('token')?' warn':'')}}
+function renderSyncBadge(){const b=document.getElementById('syncBadge');if(b){b.textContent=syncText();b.className='syncbadge'+((cfgGet('token')?dirty:(!cfgGet('lastFile')||dayDiff(keyOf(new Date(cfgGet('lastFile'))),today())>=7))?' warn':'')}}
 function renderSettings(){
   openSheet('<div class="sheet-head"><h2>پشتیبان و تنظیمات</h2><button type="button" class="x" data-act="close" aria-label="بستن">✕</button></div><div class="sheet-body"><div class="sheet-inner">'+
    '<div class="banner" id="set-status" style="background:var(--accent-soft);color:var(--ink)">'+esc(syncText())+(cfgGet('err')?'<br><span class="err">آخرین خطا: '+esc(cfgGet('err'))+'</span>':'')+'</div>'+
-   '<div class="field"><label for="s-repo">مخزن پشتیبان (نام‌کاربری/نام‌مخزن)</label><input id="s-repo" dir="ltr" autocomplete="off" placeholder="نام‌کاربری/bamdadi-data" value="'+esc(cfgGet('repo'))+'"></div>'+
+   '<details><summary class="hint" style="cursor:pointer">پشتیبان آنلاین گیت‌هاب (اختیاری)</summary><div class="field"><label for="s-repo">مخزن پشتیبان (نام‌کاربری/نام‌مخزن)</label><input id="s-repo" dir="ltr" autocomplete="off" placeholder="نام‌کاربری/bamdadi-data" value="'+esc(cfgGet('repo'))+'"></div>'+
    '<div class="field"><label for="s-tok">توکن گیت‌هاب</label><input id="s-tok" dir="ltr" type="password" autocomplete="off" placeholder="github_pat_…" value="'+esc(cfgGet('token'))+'"><span class="hint">فقط روی همین گوشی ذخیره می‌شود.</span></div>'+
-   '<button type="button" class="btn primary" data-act="s-save">ذخیره و پشتیبان‌گیری الان</button>'+
+   '<button type="button" class="btn primary" data-act="s-save">ذخیره و پشتیبان‌گیری الان</button></details>'+
    '<div class="field"><span class="lbl">پشتیبان دستی (فایل)</span><div class="actions"><button type="button" class="btn grow" data-act="s-export">دانلود فایل پشتیبان</button><label class="btn grow" for="s-imp">بازگردانی از فایل</label><input type="file" id="s-imp" accept=".json,application/json" hidden></div></div>'+
    '<span class="hint">'+fa(Object.keys(DATA.cases).length)+' پرونده درمان · '+fa(Object.keys(DATA.calves).length)+' گوساله روی این گوشی</span>'+
    '</div></div>');
@@ -942,7 +942,7 @@ function renderSettings(){
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act;
   if(a==='settings')renderSettings();
   if(a==='s-save'){cfgSet('repo',document.getElementById('s-repo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,''));cfgSet('token',document.getElementById('s-tok').value.trim());sync(true)}
-  if(a==='s-export'){const blob=new Blob([JSON.stringify(DATA)],{type:'application/json'});const u=URL.createObjectURL(blob);const l=document.createElement('a');l.href=u;l.download='bamdadi-'+toEn(jSlash(today())).replace(/\//g,'-')+'.json';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),3000)}
+  if(a==='s-export'){const blob=new Blob([JSON.stringify(DATA)],{type:'application/json'});const u=URL.createObjectURL(blob);const l=document.createElement('a');l.href=u;l.download='bamdadi-'+toEn(jSlash(today())).replace(/\//g,'-')+'.json';document.body.appendChild(l);l.click();l.remove();cfgSet('lastFile',new Date().toISOString());renderSyncBadge();renderSettings();toast('فایل دانلود شد؛ آن را در تلگرام برای خودتان بفرستید');setTimeout(()=>URL.revokeObjectURL(u),3000)}
 });
 document.addEventListener('change',async e=>{if(e.target.id!=='s-imp'||!e.target.files[0])return;
   try{const j=JSON.parse(await e.target.files[0].text());if(!j.cases||!j.calves)throw 0;DATA=merge(DATA,j);touch('cases');emit('calves');toast('بازگردانی شد');renderSettings()}catch(err){toast('این فایل پشتیبان معتبر نیست')}});
